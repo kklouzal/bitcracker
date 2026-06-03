@@ -15,7 +15,7 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2022
 
     steps:
       - name: Checkout
@@ -25,13 +25,13 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
 
       - name: Install CUDA toolkit
-        uses: Jimver/cuda-toolkit@v0.2.25
-        with:
-          cuda: "12.6.3"
-          method: network
-          sub-packages: '["nvcc", "cudart", "visual_studio_integration"]'
-          use-github-cache: false
-          use-local-cache: false
+        shell: pwsh
+        run: |
+          choco install cuda --version=12.6.3.561 -y --no-progress
+          $cudaPath = "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.6"
+          "$cudaPath\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+          "CUDA_PATH=$cudaPath" | Out-File -FilePath $env:GITHUB_ENV -Append
+          & "$cudaPath\bin\nvcc.exe" --version
 
       - name: Build Windows executables
         shell: pwsh
