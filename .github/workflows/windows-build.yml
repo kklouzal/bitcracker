@@ -27,9 +27,11 @@ jobs:
       - name: Install CUDA toolkit
         shell: pwsh
         run: |
-          $installer = Join-Path $env:RUNNER_TEMP "cuda_12.6.3_windows.exe"
-          curl.exe -L --retry 5 --retry-delay 10 --output $installer https://developer.download.nvidia.com/compute/cuda/12.6.3/local_installers/cuda_12.6.3_windows.exe
+          $installer = Join-Path $env:RUNNER_TEMP "cuda_12.6.3_561.17_windows.exe"
+          curl.exe -L --fail --retry 5 --retry-delay 10 --output $installer https://developer.download.nvidia.com/compute/cuda/12.6.3/local_installers/cuda_12.6.3_561.17_windows.exe
           if ($LASTEXITCODE -ne 0) { throw "CUDA installer download failed with exit code $LASTEXITCODE" }
+          $installerInfo = Get-Item $installer
+          if ($installerInfo.Length -lt 1000000000) { throw "CUDA installer download is too small: $($installerInfo.Length) bytes" }
           $process = Start-Process -FilePath $installer -ArgumentList @("-s", "-n", "nvcc_12.6", "cudart_12.6", "visual_studio_integration_12.6") -NoNewWindow -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "CUDA installer failed with exit code $($process.ExitCode)" }
           $cudaPath = "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.6"
