@@ -30,6 +30,8 @@ jobs:
           cuda: "12.6.3"
           method: network
           sub-packages: '["nvcc", "cudart", "visual_studio_integration"]'
+          use-github-cache: false
+          use-local-cache: false
 
       - name: Build Windows executables
         shell: pwsh
