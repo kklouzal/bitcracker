@@ -68,10 +68,23 @@ typedef off_t bc_off_t;
 #define BC_HEX_CAST(v) ((unsigned long long)(v))
 #endif
 
+static void report_position_error(void)
+{
+	if(errno != 0)
+		fprintf(stderr, "ftell error %s (%d)\n", strerror(errno), errno);
+#ifdef _WIN32
+	else
+		fprintf(stderr, "file positioning error Win32=%lu\n", GetLastError());
+#else
+	else
+		fprintf(stderr, "file positioning error\n");
+#endif
+}
+
 #define FRET_CHECK(ret)								\
         if((ret) < 0)								\
         {										\
-        	fprintf(stderr, "ftell error %s (%d)\n", strerror(errno), errno);	\
+        	report_position_error();						\
         	exit(EXIT_FAILURE);							\
         }
 
@@ -248,6 +261,8 @@ int parse_image(char * encryptedImagePath, char * outHashUser, char * outHashRec
 {
 	bc_off_t fileLen=0, j=0;
 	int version = 0, i = 0, match = 0, ret = 0, outRP = 0, fve_block = 0;
+	int size_known = 0;
+	int ch;
 	unsigned char c,d;
 	
 	encryptedImage = fopen(encryptedImagePath, "rb");
@@ -258,17 +273,39 @@ int parse_image(char * encryptedImagePath, char * outHashUser, char * outHashRec
 	}
 
 	ret=get_input_size(encryptedImage, &fileLen);
-	FRET_CHECK(ret)
-	printf("Encrypted device %s opened, size %7.2f MB\n", encryptedImagePath, (double)((fileLen/1024)/1024));
+	if(ret == 0)
+	{
+		size_known = 1;
+		printf("Encrypted device %s opened, size %7.2f MB\n", encryptedImagePath, (double)((fileLen/1024)/1024));
+	}
+	else
+	{
+		clearerr(encryptedImage);
+		errno = 0;
+		fprintf(stderr, "Warning: unable to determine input size, scanning until EOF\n");
+	}
 	ret=BC_FSEEK(encryptedImage, 0, SEEK_SET);
 	FRET_CHECK(ret)
 
-	for (j = 0; j < fileLen; j++) {
-		c = fgetc(encryptedImage);
+	for (j = 0; ; j++) {
+		ch = fgetc(encryptedImage);
+		if(ch == EOF)
+			break;
+		c = (unsigned char)ch;
+
+		if(size_known && j >= fileLen)
+			break;
+
 		while (i < (SIGNATURE_LEN-1) && (unsigned char)c == signature[i]) {
-			c = fgetc(encryptedImage);
+			ch = fgetc(encryptedImage);
+			if(ch == EOF)
+				break;
+			c = (unsigned char)ch;
 			i++;
 		}
+
+		if(ch == EOF)
+			break;
 
 		if (i == (SIGNATURE_LEN-1)) {
 			match = 1;
