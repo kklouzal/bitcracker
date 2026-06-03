@@ -108,8 +108,6 @@ int aes_pos[AES_OFFSETS] = {147}; //67 <-- can't prove as valid this second offs
 bc_off_t fp_before_aes=0, fp_before_salt=0;
 FILE *outFileUser, *outFileRecv, * encryptedImage;
 
-static char finalRP[MAX_RP][210];
-
 void * Calloc(size_t len, size_t size) {
 	void * ptr = NULL;
 	if( size <= 0)
@@ -142,11 +140,26 @@ static int usage(char *name){
 }
 
 
-static void fillBuffer(FILE *fp, unsigned char *buffer, int size)
+static int read_byte(FILE *fp, unsigned char *value)
+{
+	int ch = fgetc(fp);
+	if (ch == EOF)
+		return 0;
+
+	*value = (unsigned char)ch;
+	return 1;
+}
+
+static int read_buffer(FILE *fp, unsigned char *buffer, int size)
 {
 	int k;
-	for (k = 0; k < size; k++)
-		buffer[k] = (unsigned char)fgetc(fp);
+
+	for (k = 0; k < size; k++) {
+		if (!read_byte(fp, &buffer[k]))
+			return 0;
+	}
+
+	return 1;
 }
 
 static void print_hex(unsigned char *str, int len, FILE *out)
@@ -193,12 +206,17 @@ int rp_search_salt_aes() {
 	uint8_t a,b;
 	int ret=0, x, y;
 
+	found_ccm = 0;
+
 	for(x=0; x < SALT_OFFSETS; x++)
 	{
 		ret=BC_FSEEK(encryptedImage, salt_pos[x], SEEK_CUR);
 		FRET_CHECK(ret)
 
-		fillBuffer(encryptedImage, r_salt[RPfound], SALT_SIZE);
+		if (!read_buffer(encryptedImage, r_salt[RPfound], SALT_SIZE)) {
+			fprintf(stderr, "Unexpected EOF while reading recovery salt\n");
+			return -1;
+		}
 
 		fp_before_aes=BC_FTELL(encryptedImage);
 		FRET_CHECK(fp_before_aes)
@@ -210,8 +228,11 @@ int rp_search_salt_aes() {
 			FRET_CHECK(ret)
 
 			fprintf(stderr, "\tOffset " BC_HEX_FMT ".... ", BC_HEX_CAST(BC_FTELL(encryptedImage)));
-			a=(uint8_t)fgetc(encryptedImage);
-			b=(uint8_t)fgetc(encryptedImage);
+			if (!read_byte(encryptedImage, &a) || !read_byte(encryptedImage, &b)) {
+				fprintf(stderr, "unexpected EOF\n");
+				found_ccm=0;
+				return -1;
+			}
 			if (( a != value_type[0]) || (b != value_type[1])) {
 				fprintf(stderr, "not found :( (0x%x,0x%x)\n", a, b);
 				found_ccm=0;
@@ -240,7 +261,7 @@ int rp_search_salt_aes() {
 		}
 	}
 
-	return 0;
+	return found_ccm ? 0 : 1;
 }
 
 int rp_search_dup() {
@@ -261,7 +282,7 @@ int parse_image(char * encryptedImagePath, char * outHashUser, char * outHashRec
 {
 	bc_off_t fileLen=0, j=0;
 	int version = 0, i = 0, match = 0, ret = 0, outRP = 0, fve_block = 0;
-	int size_known = 0;
+	int signature_found = 0;
 	int ch;
 	unsigned char c,d;
 	
@@ -275,7 +296,6 @@ int parse_image(char * encryptedImagePath, char * outHashUser, char * outHashRec
 	ret=get_input_size(encryptedImage, &fileLen);
 	if(ret == 0)
 	{
-		size_known = 1;
 		printf("Encrypted device %s opened, size %7.2f MB\n", encryptedImagePath, (double)((fileLen/1024)/1024));
 	}
 	else
@@ -293,9 +313,6 @@ int parse_image(char * encryptedImagePath, char * outHashUser, char * outHashRec
 			break;
 		c = (unsigned char)ch;
 
-		if(size_known && j >= fileLen)
-			break;
-
 		while (i < (SIGNATURE_LEN-1) && (unsigned char)c == signature[i]) {
 			ch = fgetc(encryptedImage);
 			if(ch == EOF)
@@ -308,11 +325,16 @@ int parse_image(char * encryptedImagePath, char * outHashUser, char * outHashRec
 			break;
 
 		if (i == (SIGNATURE_LEN-1)) {
+			signature_found = 1;
 			match = 1;
 			fve_block++;
 			fprintf(stdout, "\n************ Signature #%d found at " BC_HEX_FMT " ************\n", fve_block, BC_HEX_CAST(BC_FTELL(encryptedImage) - i - 1));
 			ret=BC_FSEEK(encryptedImage, 1, SEEK_CUR);
-			version = fgetc(encryptedImage);
+			if (!read_byte(encryptedImage, &c)) {
+				fprintf(stderr, "Unexpected EOF while reading BitLocker version\n");
+				break;
+			}
+			version = c;
 			fprintf(stdout, "Version: %d ", version);
 			if (version == 1)
 				fprintf(stdout, "(Windows Vista)\n");
@@ -331,7 +353,8 @@ int parse_image(char * encryptedImagePath, char * outHashUser, char * outHashRec
 
 		i = 0;
 		while (i < VMK_ENTRY_SIZE && (unsigned char)c == vmk_entry[i]) {
-			c = fgetc(encryptedImage);
+			if (!read_byte(encryptedImage, &c))
+				break;
 			i++;
 		}
 
@@ -340,8 +363,10 @@ int parse_image(char * encryptedImagePath, char * outHashUser, char * outHashRec
 		
 			ret=BC_FSEEK(encryptedImage, 27, SEEK_CUR);
 			FRET_CHECK(ret)
-			c = (unsigned char)fgetc(encryptedImage);
-			d = (unsigned char)fgetc(encryptedImage);
+			if (!read_byte(encryptedImage, &c) || !read_byte(encryptedImage, &d)) {
+				fprintf(stderr, "Unexpected EOF while reading key protection type\n");
+				break;
+			}
 
 			fp_before_salt = BC_FTELL(encryptedImage);
 			FRET_CHECK(fp_before_salt)
@@ -355,18 +380,21 @@ int parse_image(char * encryptedImagePath, char * outHashUser, char * outHashRec
 			else if ((c == key_protection_recovery[0]) && (d == key_protection_recovery[1]) && RPfound < MAX_RP) 
 			{
 				fprintf(stdout, "Encrypted with Recovery Password (" BC_HEX_FMT ")\n", BC_HEX_CAST(fp_before_salt));
-				rp_search_salt_aes();
-				if (found_ccm == 0)
+				ret = rp_search_salt_aes();
+				if (ret != 0)
 				{
 					match=0;
 					i=0;
 					continue;
 				}
 				
-				fillBuffer(encryptedImage, r_nonce[RPfound], NONCE_SIZE);
-				fillBuffer(encryptedImage, r_mac[RPfound], MAC_SIZE);
-				fillBuffer(encryptedImage, r_vmk[RPfound], VMK_SIZE);
-				
+				if (!read_buffer(encryptedImage, r_nonce[RPfound], NONCE_SIZE) ||
+				    !read_buffer(encryptedImage, r_mac[RPfound], MAC_SIZE) ||
+				    !read_buffer(encryptedImage, r_vmk[RPfound], VMK_SIZE)) {
+					fprintf(stderr, "Unexpected EOF while reading recovery VMK payload\n");
+					break;
+				}
+			
 				if(rp_search_dup() == 1)
 				{
 					fprintf(stdout, "\nThis VMK has been already stored...");
@@ -407,10 +435,17 @@ int parse_image(char * encryptedImagePath, char * outHashUser, char * outHashRec
 				fprintf(stderr, "Encrypted with User Password (" BC_HEX_FMT ")\n", BC_HEX_CAST(fp_before_salt));
 				ret=BC_FSEEK(encryptedImage, 12, SEEK_CUR);
 				FRET_CHECK(ret)
-				fillBuffer(encryptedImage, p_salt, SALT_SIZE);
+				if (!read_buffer(encryptedImage, p_salt, SALT_SIZE)) {
+					fprintf(stderr, "Unexpected EOF while reading user-password salt\n");
+					break;
+				}
 				ret=BC_FSEEK(encryptedImage, 83, SEEK_CUR);
 				FRET_CHECK(ret)
-				if (((unsigned char)fgetc(encryptedImage) != value_type[0]) || ((unsigned char)fgetc(encryptedImage) != value_type[1])) {
+				if (!read_byte(encryptedImage, &c) || !read_byte(encryptedImage, &d)) {
+					fprintf(stderr, "Unexpected EOF while reading user-password AES-CCM marker\n");
+					break;
+				}
+				if (c != value_type[0] || d != value_type[1]) {
 					fprintf(stderr, "Error: VMK not encrypted with AES-CCM\n");
 					match=0;
 					i=0;
@@ -426,15 +461,18 @@ int parse_image(char * encryptedImagePath, char * outHashUser, char * outHashRec
 				fprintf(stdout, "UP Salt: ");
 				print_hex(p_salt, SALT_SIZE, stdout);
 
-				fillBuffer(encryptedImage, p_nonce, NONCE_SIZE);
+				if (!read_buffer(encryptedImage, p_nonce, NONCE_SIZE) ||
+				    !read_buffer(encryptedImage, p_mac, MAC_SIZE) ||
+				    !read_buffer(encryptedImage, p_vmk, VMK_SIZE)) {
+					fprintf(stderr, "Unexpected EOF while reading user-password VMK payload\n");
+					break;
+				}
 				fprintf(stdout, "\nUP Nonce: ");
 				print_hex(p_nonce, NONCE_SIZE, stdout);
 
-				fillBuffer(encryptedImage, p_mac, MAC_SIZE);
 				fprintf(stdout, "\nUP MAC: ");
 				print_hex(p_mac, MAC_SIZE, stdout);
 
-				fillBuffer(encryptedImage, p_vmk, VMK_SIZE);
 				fprintf(stdout, "\nUP VMK: ");
 				print_hex(p_vmk, VMK_SIZE, stdout);
 				fprintf(stdout, "\n");
@@ -452,7 +490,10 @@ int parse_image(char * encryptedImagePath, char * outHashUser, char * outHashRec
 	fclose(encryptedImage);
 
 	if (userPasswordFound == 0 && RPfound == 0) {
-		fprintf(stderr, "Error while extracting data: No signature found!\n");
+		if (signature_found)
+			fprintf(stderr, "Error while extracting data: BitLocker signature found, but no supported VMK payload could be extracted\n");
+		else
+			fprintf(stderr, "Error while extracting data: No signature found!\n");
 		return 1;
 	} else {
 		if(userPasswordFound == 1)
@@ -522,7 +563,6 @@ int main(int argc, char **argv)
 {
 	int opt;
 	char * imagePath=NULL;
-	char * outPath=NULL;
 	char * outHashUser=NULL;
 	char * outHashRecovery=NULL;
 	errno = 0;
@@ -591,15 +631,22 @@ int main(int argc, char **argv)
 
 	printf("\n---------> BitCracker Hash Extractor <---------\n");
 	if(parse_image(imagePath, outHashUser, outHashRecovery))
+	{
 		fprintf(stderr, "\nError while parsing input device image\n");
+		free(imagePath);
+		free(outHashUser);
+		free(outHashRecovery);
+		return EXIT_FAILURE;
+	}
 	else
 	{
 		if(userPasswordFound) printf("\nOutput file for user password attack: \"%s\"\n", outHashUser);
 		if(RPfound) printf("\nOutput file for recovery password attack: \"%s\"\n", outHashRecovery);
 	}
 
+	free(imagePath);
 	free(outHashUser);
 	free(outHashRecovery);
 
-	return 0;
+	return EXIT_SUCCESS;
 }
