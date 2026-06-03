@@ -1,0 +1,42 @@
+name: Windows build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+    paths:
+      - ".github/workflows/windows-build.yml"
+      - "compat/**"
+      - "scripts/build_windows.ps1"
+      - "src_CUDA/**"
+      - "src_HashExtractor/**"
+      - "src_RPGenerator/**"
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install CUDA toolkit
+        uses: Jimver/cuda-toolkit@v0.2.25
+        with:
+          cuda: "12.6.3"
+          method: network
+          sub-packages: '["nvcc", "cudart", "visual_studio_integration"]'
+
+      - name: Build Windows executables
+        shell: pwsh
+        run: ./scripts/build_windows.ps1
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bitcracker-windows-sm89
+          path: build/*.exe

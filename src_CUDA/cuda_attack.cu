@@ -118,7 +118,7 @@ char *cuda_attack(
 	if (!memcmp(dname, "-\0", 2)) {
 		fp = stdin;
 	} else {
-		fp = fopen(dname, "r");
+		fp = fopen(dname, "rb");
 		if (!fp) {
 			fprintf(stderr, "Can't open dictionary file %s.\n", dname);
 			return NULL;

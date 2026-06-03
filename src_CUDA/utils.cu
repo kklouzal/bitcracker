@@ -98,7 +98,7 @@ int parse_data(char *input_hash, unsigned char ** salt, unsigned char ** nonce,	
 		goto out;
 	}
 
-	fphash = fopen(input_hash, "r");
+	fphash = fopen(input_hash, "rb");
 	if (!fphash) {
 		fprintf(stderr, "! %s : %s\n", input_hash, strerror(errno));
 		goto out;
@@ -327,4 +327,3 @@ int readFilePassword(uint32_t ** buf_i, char ** buf_c, int maxNumPsw, FILE *fp) 
 
 	return i;
 }
-

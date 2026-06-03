@@ -200,7 +200,7 @@ int parse_image(char * encryptedImagePath, char * outHashUser, char * outHashRec
 	int version = 0, i = 0, match = 0, ret = 0, outRP = 0, fve_block = 0;
 	unsigned char c,d;
 	
-	encryptedImage = fopen(encryptedImagePath, "r");
+	encryptedImage = fopen(encryptedImagePath, "rb");
 
 	if (!encryptedImage || !outHashUser || !outHashRecovery) {
 		fprintf(stderr, "! %s : %s\n", encryptedImagePath, strerror(errno));
@@ -519,4 +519,3 @@ int main(int argc, char **argv)
 
 	return 0;
 }
-
