@@ -21,12 +21,12 @@ function Invoke-Checked {
 }
 
 Invoke-Checked cl.exe `
-    /nologo /O2 /W3 /I $Compat /D_CRT_SECURE_NO_WARNINGS `
+    /nologo /O2 /W3 /bigobj /I $Compat /D_CRT_SECURE_NO_WARNINGS `
     "/Fe:$Build\bitcracker_hash.exe" `
     "$Root\src_HashExtractor\bitcracker_hash.c"
 
 Invoke-Checked cl.exe `
-    /nologo /O2 /W3 /I $Compat /D_CRT_SECURE_NO_WARNINGS `
+    /nologo /O2 /W3 /bigobj /I $Compat /D_CRT_SECURE_NO_WARNINGS `
     "/Fe:$Build\bitcracker_rpgen.exe" `
     "$Root\src_RPGenerator\bitcracker_rpgen.c"
 
