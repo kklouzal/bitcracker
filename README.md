@@ -25,7 +25,7 @@ We strongly recommend to run your attack on a GPU rather than CPU for performanc
 
 Running the `build.sh` script generates 4 executables inside the `build` directory: `bitcracker_hash`, `bitcracker_rpgen`, `bitcracker_cuda`, `bitcracker_opencl`.
 
-In order to build `bitcracker_cuda` coherently with your NVIDIA GPU and CUDA version, you need to modify the `src_CUDA/Makefile` chosing the correct SM version. As a reference, you can use the following table:
+In order to build `bitcracker_cuda` coherently with your NVIDIA GPU and CUDA version, you need to modify the `src_CUDA/Makefile` choosing the correct SM version. As a reference, you can use the following table:
 
 | GPU Architecture | Suggested CUDA |          Makefile 	     |
 | ---------------- | -------------- | -------------------------- |
@@ -33,6 +33,24 @@ In order to build `bitcracker_cuda` coherently with your NVIDIA GPU and CUDA ver
 | Maxwell          | CUDA 8.0       | arch=compute_52,code=sm_52 |
 | Pascal           | CUDA 9.0       | arch=compute_60,code=sm_60 |
 | Volta            | CUDA 9.0       | arch=compute_70,code=sm_70 |
+
+### Windows CUDA build
+
+This fork also includes a GitHub Actions Windows build that produces a downloadable `bitcracker-windows-sm89` artifact containing:
+
+- `bitcracker_cuda.exe`
+- `bitcracker_hash.exe`
+- `bitcracker_rpgen.exe`
+
+The workflow builds the CUDA executable for NVIDIA Ada Lovelace GPUs with `arch=compute_89,code=sm_89`, which is the target used by RTX 4090-class cards. It runs automatically when the Windows workflow, compatibility headers, build script, or relevant source files change, and it can also be started manually from the Actions tab.
+
+To run the same Windows build locally, install Visual Studio Build Tools and CUDA 12.6, open a PowerShell session with the MSVC build environment configured, then run:
+
+```powershell
+./scripts/build_windows.ps1
+```
+
+The Windows build currently covers the CUDA cracker and the two helper tools. The OpenCL executable is still built through the Linux/Unix Makefile path.
 
 ## Prepare the attack
 

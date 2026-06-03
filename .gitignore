@@ -3,3 +3,6 @@ test_hash/
 *.obj
 *.exp
 *.lib
+*.exe
+*.ilk
+*.pdb
