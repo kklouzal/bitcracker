@@ -69,17 +69,9 @@ int getGPUStats()
 
 	printf("\n\n====================================\nSelected device: GPU %s (ID: %d)\n====================================\n\n", prop.name, gpu_id);
 	printf("Compute capability: %d.%d\n", prop.major, prop.minor ); 
-	printf("Clock rate: %d\n", prop.clockRate );
-	printf("Clock rate: %.0f MHz (%.02f GHz)\n", prop.clockRate * 1e-3f, prop.clockRate * 1e-6f);
-	printf("Memory Clock Rate (KHz): %d\n", prop.memoryClockRate);
 	printf("Memory Bus Width (bits): %d\n", prop.memoryBusWidth);
-	printf("Peak Memory Bandwidth (GB/s): %f\n", 2.0*prop.memoryClockRate*(prop.memoryBusWidth/8)/1.0e6);
-	printf("Device copy overlap: " );
-	if (prop.deviceOverlap) printf("Enabled\n" ); else printf("Disabled\n" );
 	printf("Async memory engine count: %d\n",  prop.asyncEngineCount);
 	printf("Concurrent kernels: %d\n",  prop.concurrentKernels);
-	printf("Kernel execition timeout: ");	
-	if (prop.kernelExecTimeoutEnabled) printf("Enabled\n" ); else printf("Disabled\n" );
 	printf("Total global mem:  %ld bytes\n", prop.totalGlobalMem );
 	printf("Free memory: %zd bytes\n", avail);
 	printf("Texture Alignment:  %ld\n", prop.textureAlignment );
