@@ -75,13 +75,41 @@ void print_hex(unsigned char *str, int len)
 	printf("\n");
 }
 
+static int parseRecoveryBlock(const char *block, uint16_t *value)
+{
+	int i;
+	long parsed;
+	char *end = NULL;
+	int8_t check_digit;
+
+	if(block == NULL || value == NULL || strlen(block) != 6)
+		return BIT_FAILURE;
+
+	for(i = 0; i < 6; i++)
+		if(!isdigit((unsigned char)block[i]))
+			return BIT_FAILURE;
+
+	errno = 0;
+	parsed = strtol(block, &end, 10);
+	if(errno != 0 || end == NULL || *end != '\0' || parsed < 0 || parsed >= 720896 || (parsed % 11) != 0)
+		return BIT_FAILURE;
+
+	check_digit = (int8_t)(block[0] - block[1] + block[2] - block[3] + block[4] - '0') % 11;
+	if(check_digit < 0)
+		check_digit = (int8_t)(check_digit + 11);
+	if(check_digit != (block[5] - '0'))
+		return BIT_FAILURE;
+
+	*value = (uint16_t)(parsed / 11);
+	return BIT_SUCCESS;
+}
+
 int parse_data(char *input_hash, unsigned char ** salt, unsigned char ** nonce,	unsigned char ** vmk, unsigned char ** mac)
 {
 	char * hash;
 	char *p;
 	int i, salt_size, iterations, vmk_size, nonce_size;
 	FILE * fphash;
-	char tmp[2];
 	int j=0, auth_method=0;
 	const char zero_string[17]="0000000000000000";
 
@@ -217,7 +245,9 @@ int parse_data(char *input_hash, unsigned char ** salt, unsigned char ** nonce,	
 static int print_once=0;
 int readFilePassword(uint32_t ** buf_i, char ** buf_c, int maxNumPsw, FILE *fp) {
 	int i=0, j=0, k=0, size=0, count=0;
-	char tmp[PSW_CHAR_SIZE], tmp2[PSW_CHAR_SIZE], *p;
+	char tmp[PSW_CHAR_SIZE], *p;
+	unsigned char tmp2[PSW_CHAR_SIZE];
+	uint16_t recovery_block;
 	memset(tmp, 0, PSW_CHAR_SIZE);
 	
 	if (fp == NULL || feof(fp) || buf_i == NULL)
@@ -225,7 +255,9 @@ int readFilePassword(uint32_t ** buf_i, char ** buf_c, int maxNumPsw, FILE *fp) 
 
 	while(fgets(tmp, PSW_CHAR_SIZE, fp)) {
 		j=0; k=0; count=0;
-		size = (strlen(tmp)-1);
+		size = strlen(tmp);
+		while(size > 0 && (tmp[size-1] == '\n' || tmp[size-1] == '\r'))
+			tmp[--size] = '\0';
 		
 		if(attack_mode == MODE_USER_PASS && ( size > SECOND_LENGHT || size < MIN_INPUT_PASSWORD_LEN) && print_once == 0)
 		{
@@ -244,13 +276,10 @@ int readFilePassword(uint32_t ** buf_i, char ** buf_c, int maxNumPsw, FILE *fp) 
 			p = strtokm(tmp, "-");
 			do
 			{
-				//Dislocker, Recovery Password checks
-				if( ((atoi(p) % 11) != 0) || (atoi(p) >= 720896) ) break;
-				int8_t check_digit = (int8_t) ( p[0] - p[1] + p[2] - p[3] + p[4] - 48 ) % 11;
-				if( check_digit < 0 ) check_digit = (int8_t) check_digit + 11;
-				if( check_digit != (p[5] - 48)) break;
+				if(count >= RECOVERY_PASS_BLOCKS * 2 || parseRecoveryBlock(p, &recovery_block) == BIT_FAILURE)
+					break;
 
-				((uint16_t*)(tmp2+count))[0] = (uint16_t)(atoi(p) / 11);
+				memcpy(tmp2 + count, &recovery_block, sizeof(recovery_block));
 				p = strtokm(NULL, "-");
 				count+=2;
 

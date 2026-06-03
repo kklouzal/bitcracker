@@ -128,8 +128,9 @@ char *cuda_attack(
 
 	// ---- HOST VARS ----
 	BITCRACKER_CUDA_CHECK( cudaHostAlloc( (void ** ) &hostPasswordInt, tot_psw * PSW_INT_SIZE * sizeof(uint32_t), cudaHostAllocDefault) );
-	memset(hostPasswordInt, tot_psw * PSW_INT_SIZE * sizeof(uint32_t), 0);
+	memset(hostPasswordInt, 0, tot_psw * PSW_INT_SIZE * sizeof(uint32_t));
 	BITCRACKER_CUDA_CHECK( cudaHostAlloc( (void ** ) &hostPassword, tot_psw*PSW_CHAR_SIZE*sizeof(char), cudaHostAllocDefault) );
+	memset(hostPassword, 0, tot_psw * PSW_CHAR_SIZE * sizeof(char));
 	BITCRACKER_CUDA_CHECK( cudaHostAlloc( (void ** ) &hostFound, sizeof(uint32_t), cudaHostAllocDefault) );
 	*hostFound = -1;
 	// ------------------------

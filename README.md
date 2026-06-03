@@ -25,6 +25,12 @@ We strongly recommend to run your attack on a GPU rather than CPU for performanc
 
 Running the `build.sh` script generates 4 executables inside the `build` directory: `bitcracker_hash`, `bitcracker_rpgen`, `bitcracker_cuda`, `bitcracker_opencl`.
 
+If you only need the CUDA recovery-password path, or your system does not have OpenCL headers installed, run:
+
+```bash
+SKIP_OPENCL=1 ./build.sh
+```
+
 In order to build `bitcracker_cuda` coherently with your NVIDIA GPU and CUDA version, you need to modify the `src_CUDA/Makefile` choosing the correct SM version. As a reference, you can use the following table:
 
 | GPU Architecture | Suggested CUDA |          Makefile 	     |
@@ -123,7 +129,7 @@ Where:
 - `-f` : path to the `hash_user_pass.txt` file
 - `-d` : path to your wordlist
 - `-t` : number of passwords processed by each CUDA thread
-- `-b` : number of CUDA blocks
+- `-b` : number of CUDA blocks. If omitted, BitCracker uses the selected GPU's streaming multiprocessor count.
 - `-g` : NVIDIA GPU device ID
 - `-u` : specify your want an user password attack
 
@@ -227,9 +233,9 @@ According to our research, the password distribution is uniform and there is no 
 
 A command line example:
 
-```./build/bitcracker_cuda -f hash_recv_pass.txt -d bitcracker_wlrp_0.txt -t 1 -b 1 -g 0 -r```
+```./build/bitcracker_cuda -f hash_recv_pass.txt -d bitcracker_wlrp_0.txt -t 8 -g 0 -r```
 
-Where options are the same as in case of User Password but instead of `-u` you need to specify `-r`. An output example:
+Where options are the same as in case of User Password but instead of `-u` you need to specify `-r`. For recovery password testing, start without `-m` for the fast path and use `-m` only to verify a possible match if the fast path reports one. An output example:
 
 ```
 ====================================

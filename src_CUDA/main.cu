@@ -52,6 +52,22 @@ void usage(char *name){
 		"\t\tSet the number of blocks\n\n", name);
 }
 
+int getGPUDefaultBlocks()
+{
+	cudaDeviceProp prop;
+
+	if(gpu_id < 0)
+	{
+		fprintf(stderr, "Invalid device number: %d\n", gpu_id);
+		return -1;
+	}
+
+	BITCRACKER_CUDA_CHECK( cudaSetDevice(gpu_id) );
+	BITCRACKER_CUDA_CHECK( cudaGetDeviceProperties(&prop, gpu_id) );
+
+	return prop.multiProcessorCount > 0 ? prop.multiProcessorCount : 1;
+}
+
 int getGPUStats()
 {
 	cudaDeviceProp prop;
@@ -64,7 +80,7 @@ int getGPUStats()
 	}
 
 	BITCRACKER_CUDA_CHECK( cudaSetDevice(gpu_id) );
-	cudaGetDeviceProperties(&prop, gpu_id);
+	BITCRACKER_CUDA_CHECK( cudaGetDeviceProperties(&prop, gpu_id) );
 	BITCRACKER_CUDA_CHECK( cudaMemGetInfo(&avail, &total) );
 
 	printf("\n\n====================================\nSelected device: GPU %s (ID: %d)\n====================================\n\n", prop.name, gpu_id);
@@ -99,8 +115,8 @@ int main (int argc, char **argv)
 {
 	char * input_dictionary=NULL, * input_hash=NULL;
 	unsigned char *nonce, *vmk, *mac;
-	uint32_t * w_blocks_d;
-	int gridBlocks = 1, opt=0;
+	uint32_t * w_blocks_d = NULL;
+	int gridBlocks = 0, opt=0;
 
 	printf("\n---------> BitCracker: BitLocker password cracking tool <---------\n");
 
@@ -119,6 +135,11 @@ int main (int argc, char **argv)
 		switch (opt) {
 			case 'b':
 				gridBlocks = atoi(optarg);
+				if(gridBlocks <= 0)
+				{
+					fprintf(stderr, "ERROR: wrong CUDA blocks number\n");
+					exit(EXIT_FAILURE);
+				}
 				break;
 
 			case 'd':
@@ -212,6 +233,16 @@ int main (int argc, char **argv)
 	}
 	//***********************************************************
 
+	if(gridBlocks == 0)
+	{
+		gridBlocks = getGPUDefaultBlocks();
+		if(gridBlocks <= 0)
+		{
+			fprintf(stderr, "Device error... exit!\n");
+			goto cleanup;
+		}
+	}
+
 	tot_psw=(CUDA_THREADS_NO_MAC*gridBlocks*psw_x_thread);
 
 	//****************** GPU device *******************
@@ -255,7 +286,8 @@ int main (int argc, char **argv)
 	//*********************************************
 
 cleanup:
-	BITCRACKER_CUDA_CHECK( cudaFree(w_blocks_d) );
+	if(w_blocks_d != NULL)
+		BITCRACKER_CUDA_CHECK( cudaFree(w_blocks_d) );
 	printf("\n");
 	return 0;
 }

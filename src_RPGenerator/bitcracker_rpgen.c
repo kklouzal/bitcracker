@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <ctype.h>
+#include <errno.h>
 #include <unistd.h>
 
 #define DEF_PSW 	5000000
@@ -6588,6 +6590,34 @@ char *strtokm(char *s1, const char *delims)
 	return s1;
 }
 
+int parseRecoveryBlock(const char *block)
+{
+	int i;
+	long parsed;
+	char *end = NULL;
+	int8_t check_digit;
+
+	if(block == NULL || strlen(block) != 6)
+		return -1;
+
+	for(i = 0; i < 6; i++)
+		if(!isdigit((unsigned char)block[i]))
+			return -1;
+
+	errno = 0;
+	parsed = strtol(block, &end, 10);
+	if(errno != 0 || end == NULL || *end != '\0' || parsed < 0 || parsed >= 720896 || (parsed % 11) != 0)
+		return -1;
+
+	check_digit = (int8_t)(block[0] - block[1] + block[2] - block[3] + block[4] - '0') % 11;
+	if(check_digit < 0)
+		check_digit = (int8_t)(check_digit + 11);
+	if(check_digit != (block[5] - '0'))
+		return -1;
+
+	return (int)(parsed / 11);
+}
+
 void findInitialIndexes()
 {
 	int index=0, i=0;
@@ -6679,7 +6709,7 @@ int main (int argc, char **argv)
 				break;
 
 			case 's':
-				if(strlen(optarg) < RP_STRING_LEN)
+				if(strlen(optarg) != RP_STRING_LEN)
 				{
 					fprintf(stderr, "Input recovery password wrong format\n");
 					exit(EXIT_FAILURE);
@@ -6690,14 +6720,7 @@ int main (int argc, char **argv)
 				p = strtokm(tmpString, "-");
 				do
 				{
-					if( ((atoi(p) % 11) != 0) || (atoi(p) >= 720896) )
-					{
-						fprintf(stderr, "Input recovery password has a wrong format\n");
-						exit(EXIT_FAILURE);
-					}
-					int8_t check_digit = (int8_t) ( p[0] - p[1] + p[2] - p[3] + p[4] - 48 ) % 11;
-					if( check_digit < 0 ) check_digit = (int8_t) check_digit + 11;
-					if( check_digit != (p[5] - 48))
+					if(parseRecoveryBlock(p) < 0)
 					{
 						fprintf(stderr, "Input recovery password has a wrong format\n");
 						exit(EXIT_FAILURE);
